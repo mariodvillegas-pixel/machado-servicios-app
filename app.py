@@ -5,7 +5,7 @@ import plotly.express as px
 
 from utils.pdf_parser import extract_from_pdf
 from utils.sheets import SheetsDB
-from utils.liquidacion import calcular, generar_tabla, fmt_peso
+from utils.liquidacion import calcular, generar_tabla, generar_pdf, fmt_peso
 
 # ── Configuración de página ──────────────────────────────────────────────────
 st.set_page_config(
@@ -151,9 +151,21 @@ if pagina == "📄 Nuevo Recibo":
         st.text_area(
             "Copia este texto y compártelo por WhatsApp",
             value=tabla,
-            height=480,
+            height=420,
             label_visibility="visible",
         )
+
+        # Botón de descarga PDF
+        try:
+            pdf_bytes = generar_pdf(data, res)
+            st.download_button(
+                label="⬇️ Descargar PDF",
+                data=pdf_bytes,
+                file_name=f"liquidacion_{data.get('mes','')}_{data.get('año','')}.pdf",
+                mime="application/pdf",
+            )
+        except Exception as e:
+            st.warning(f"No se pudo generar el PDF: {e}")
 
         # Resumen de totales visual
         st.subheader("Resumen")
