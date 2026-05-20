@@ -31,10 +31,20 @@ class SheetsDB:
             self.ws.insert_row(COLUMNS, 1)
 
     def get_all(self) -> pd.DataFrame:
-        records = self.ws.get_all_records()
-        if not records:
+        # Use get_all_values() + manual parsing for broader compatibility
+        try:
+            values = self.ws.get_all_values()
+        except Exception as e:
+            # Re-raise with full details so Streamlit shows the real error
+            raise RuntimeError(
+                f"get_all_values failed [{type(e).__name__}]: {e} | "
+                f"ws.title={self.ws.title!r} | ws.id={getattr(self.ws, 'id', '?')!r}"
+            ) from e
+        if not values or len(values) < 2:
             return pd.DataFrame(columns=COLUMNS)
-        df = pd.DataFrame(records)
+        headers = values[0]
+        rows = values[1:]
+        df = pd.DataFrame(rows, columns=headers) if rows else pd.DataFrame(columns=headers)
         # Ensure numeric columns
         num_cols = [c for c in COLUMNS if c not in ("mes", "periodo")]
         for col in num_cols:
