@@ -103,13 +103,26 @@ def generar_tabla(data: dict, res: dict) -> str:
     return "\n".join(lines)
 
 
+def _safe(text) -> str:
+    """Convierte texto a caracteres compatibles con Helvetica (Latin-1)."""
+    reemplazos = {
+        "—": "-", "–": "-", "’": "'", "‘": "'",
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ñ": "n",
+        "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U", "Ñ": "N",
+    }
+    s = str(text)
+    for orig, rep in reemplazos.items():
+        s = s.replace(orig, rep)
+    return s.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def generar_pdf(data: dict, res: dict) -> bytes:
     """Genera un PDF de la liquidación y lo retorna como bytes."""
     from fpdf import FPDF
 
-    mes = data.get("mes", "")
-    año = data.get("año", "")
-    per = data.get("periodo", "")
+    mes = _safe(data.get("mes", ""))
+    año = _safe(data.get("año", ""))
+    per = _safe(data.get("periodo", ""))
 
     en_val  = float(data.get("energia_val", 0))
     gas_val = float(data.get("gas_val", 0))
@@ -163,10 +176,10 @@ def generar_pdf(data: dict, res: dict) -> bytes:
     # ── PISO 1 ────────────────────────────────────────────────────────────────
     titulo_piso("PISO 1")
     if en_val:
-        fila(f"Energia ({fmt_m3(data['energia_kwh'])} kWh)", fmt_peso(en_val))
+        fila(_safe(f"Energia ({fmt_m3(data['energia_kwh'])} kWh)"), fmt_peso(en_val))
     if gas_val:
-        fila(f"Gas ({fmt_m3(data['gas_m3'])} m3)", fmt_peso(gas_val))
-    fila(f"Agua ({fmt_m3(res['m3_p1'])} m3)", fmt_peso(res["agua_p1"]))
+        fila(_safe(f"Gas ({fmt_m3(data['gas_m3'])} m3)"), fmt_peso(gas_val))
+    fila(_safe(f"Agua ({fmt_m3(res['m3_p1'])} m3)"), fmt_peso(res["agua_p1"]))
     fila("Alcantarillado", fmt_peso(res["alc_p1"]))
     if acu_val:
         fila("Acuerdo de pago", fmt_peso(acu_val))
@@ -176,23 +189,23 @@ def generar_pdf(data: dict, res: dict) -> bytes:
 
     # ── PISO 2 ────────────────────────────────────────────────────────────────
     titulo_piso("PISO 2")
-    fila(f"Agua ({fmt_m3(res['m3_p2'])} m3)", fmt_peso(res["agua_p2"]))
+    fila(_safe(f"Agua ({fmt_m3(res['m3_p2'])} m3)"), fmt_peso(res["agua_p2"]))
     fila("Alcantarillado", fmt_peso(res["alc_p2"]))
     linea_total(res["total_p2"])
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, f"  Reembolsar al Piso 1: {fmt_peso(res['total_p2'])}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, _safe(f"  Reembolsar al Piso 1: {fmt_peso(res['total_p2'])}"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(2)
 
     # ── PISO 3 ────────────────────────────────────────────────────────────────
     titulo_piso("PISO 3")
-    fila(f"Agua ({fmt_m3(res['m3_p3'])} m3)", fmt_peso(res["agua_p3"]))
+    fila(_safe(f"Agua ({fmt_m3(res['m3_p3'])} m3)"), fmt_peso(res["agua_p3"]))
     fila("Alcantarillado", fmt_peso(res["alc_p3"]))
     linea_total(res["total_p3"])
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, f"  Reembolsar al Piso 1: {fmt_peso(res['total_p3'])}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 5, _safe(f"  Reembolsar al Piso 1: {fmt_peso(res['total_p3'])}"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(4)
 
