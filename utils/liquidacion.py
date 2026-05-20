@@ -210,6 +210,6 @@ def generar_pdf(data: dict, res: dict) -> bytes:
     pdf.set_y(-20)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(150, 150, 150)
-    pdf.cell(0, 5, f"Edificio Machado — Generado automaticamente", align="C")
+    pdf.cell(0, 5, f"Edificio Machado - Generado automaticamente", align="C")
 
     return bytes(pdf.output())
