@@ -21,25 +21,23 @@ COLUMNS = [
 class SheetsDB:
     def __init__(self, credentials_dict: dict, sheet_id: str):
         creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
-        client = gspread.authorize(creds)
-        self.ws = client.open_by_key(sheet_id).sheet1
+        self._client = gspread.authorize(creds)
+        self._sheet_id = sheet_id
         self._ensure_headers()
 
+    def _ws(self):
+        """Always return a fresh worksheet reference (handles tab renames)."""
+        return self._client.open_by_key(self._sheet_id).sheet1
+
     def _ensure_headers(self):
-        row1 = self.ws.row_values(1)
+        ws = self._ws()
+        row1 = ws.row_values(1)
         if not row1:
-            self.ws.insert_row(COLUMNS, 1)
+            ws.insert_row(COLUMNS, 1)
 
     def get_all(self) -> pd.DataFrame:
-        # Use get_all_values() + manual parsing for broader compatibility
-        try:
-            values = self.ws.get_all_values()
-        except Exception as e:
-            # Re-raise with full details so Streamlit shows the real error
-            raise RuntimeError(
-                f"get_all_values failed [{type(e).__name__}]: {e} | "
-                f"ws.title={self.ws.title!r} | ws.id={getattr(self.ws, 'id', '?')!r}"
-            ) from e
+        ws = self._ws()
+        values = ws.get_all_values()
         if not values or len(values) < 2:
             return pd.DataFrame(columns=COLUMNS)
         headers = values[0]
@@ -54,6 +52,7 @@ class SheetsDB:
 
     def save_mes(self, data: dict):
         """Guarda o actualiza el registro del mes."""
+        ws = self._ws()
         df = self.get_all()
         row = [data.get(col, 0) for col in COLUMNS]
 
@@ -62,10 +61,10 @@ class SheetsDB:
                    (df["año"].astype(str) == str(data.get("año", "")))
             if mask.any():
                 idx = int(df[mask].index[0]) + 2  # +1 header, +1 1-based
-                self.ws.update(f"A{idx}", [row])
+                ws.update(f"A{idx}", [row])
                 return
 
-        self.ws.append_row(row)
+        ws.append_row(row)
 
     def get_residentes_ultimo(self) -> tuple:
         """Retorna residentes del mes más reciente guardado."""
