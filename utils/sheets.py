@@ -44,10 +44,9 @@ class SheetsDB:
         return self._client.open_by_key(self._sheet_id).sheet1
 
     def _ensure_headers(self):
-        ws = self._ws()
-        row1 = ws.row_values(1)
+        row1 = self._api_get("A1:ZZZ1")
         if not row1:
-            ws.insert_row(COLUMNS, 1)
+            self._ws().insert_row(COLUMNS, 1)
 
     def get_all(self) -> pd.DataFrame:
         # Range "A:ZZZ" without sheet title → first sheet, no title lookup
