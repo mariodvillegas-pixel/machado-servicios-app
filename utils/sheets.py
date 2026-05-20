@@ -1,10 +1,10 @@
-import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import AuthorizedSession
+import urllib.parse
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",
 ]
 
 COLUMNS = [
@@ -17,46 +17,57 @@ COLUMNS = [
     "total_p1", "total_p2", "total_p3",
 ]
 
+BASE = "https://sheets.googleapis.com/v4/spreadsheets"
+
 
 class SheetsDB:
     def __init__(self, credentials_dict: dict, sheet_id: str):
-        self._creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+        creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
+        self._session = AuthorizedSession(creds)
         self._sheet_id = sheet_id
-        self._client = gspread.authorize(self._creds)
         self._ensure_headers()
 
-    # ── Direct HTTP helper (bypasses gspread worksheet title caching) ──────────
-    def _api_get(self, range_name: str) -> list:
-        """Call the Sheets API values.get directly — no worksheet object needed."""
-        from google.auth.transport.requests import AuthorizedSession
-        import urllib.parse
-        session = AuthorizedSession(self._creds)
-        encoded = urllib.parse.quote(range_name, safe="")
-        url = (f"https://sheets.googleapis.com/v4/spreadsheets"
-               f"/{self._sheet_id}/values/{encoded}")
-        resp = session.get(url, params={"valueRenderOption": "FORMATTED_VALUE"})
-        resp.raise_for_status()
-        return resp.json().get("values", [])
+    # ── REST helpers ─────────────────────────────────────────────────────────
+    def _get(self, range_name: str) -> list:
+        enc = urllib.parse.quote(range_name, safe="")
+        url = f"{BASE}/{self._sheet_id}/values/{enc}"
+        r = self._session.get(url, params={"valueRenderOption": "FORMATTED_VALUE"})
+        r.raise_for_status()
+        return r.json().get("values", [])
 
-    # ── gspread worksheet (for writes only) ───────────────────────────────────
-    def _ws(self):
-        """Fresh worksheet for writes (position-based, not by title)."""
-        return self._client.open_by_key(self._sheet_id).sheet1
+    def _update(self, range_name: str, rows: list):
+        enc = urllib.parse.quote(range_name, safe="")
+        url = f"{BASE}/{self._sheet_id}/values/{enc}"
+        r = self._session.put(
+            url,
+            json={"range": range_name, "values": rows, "majorDimension": "ROWS"},
+            params={"valueInputOption": "USER_ENTERED"},
+        )
+        r.raise_for_status()
 
+    def _append(self, row: list):
+        enc = urllib.parse.quote("A:A", safe="")
+        url = f"{BASE}/{self._sheet_id}/values/{enc}:append"
+        r = self._session.post(
+            url,
+            json={"values": [row], "majorDimension": "ROWS"},
+            params={"valueInputOption": "USER_ENTERED", "insertDataOption": "INSERT_ROWS"},
+        )
+        r.raise_for_status()
+
+    # ── Public API ────────────────────────────────────────────────────────────
     def _ensure_headers(self):
-        row1 = self._api_get("A1:ZZZ1")
+        row1 = self._get("A1:ZZZ1")
         if not row1:
-            self._ws().insert_row(COLUMNS, 1)
+            self._append(COLUMNS)
 
     def get_all(self) -> pd.DataFrame:
-        # Range "A:ZZZ" without sheet title → first sheet, no title lookup
-        values = self._api_get("A:ZZZ")
+        values = self._get("A:ZZZ")
         if not values or len(values) < 2:
             return pd.DataFrame(columns=COLUMNS)
         headers = values[0]
         rows = values[1:]
-        df = pd.DataFrame(rows, columns=headers) if rows else pd.DataFrame(columns=headers)
-        # Ensure numeric columns
+        df = pd.DataFrame(rows, columns=headers)
         num_cols = [c for c in COLUMNS if c not in ("mes", "periodo")]
         for col in num_cols:
             if col in df.columns:
@@ -64,8 +75,6 @@ class SheetsDB:
         return df
 
     def save_mes(self, data: dict):
-        """Guarda o actualiza el registro del mes."""
-        ws = self._ws()
         df = self.get_all()
         row = [data.get(col, 0) for col in COLUMNS]
 
@@ -74,13 +83,12 @@ class SheetsDB:
                    (df["año"].astype(str) == str(data.get("año", "")))
             if mask.any():
                 idx = int(df[mask].index[0]) + 2  # +1 header, +1 1-based
-                ws.update(f"A{idx}", [row])
+                self._update(f"A{idx}:ZZZ{idx}", [row])
                 return
 
-        ws.append_row(row)
+        self._append(row)
 
     def get_residentes_ultimo(self) -> tuple:
-        """Retorna residentes del mes más reciente guardado."""
         df = self.get_all()
         if df.empty:
             return 3, 3, 2
