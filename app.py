@@ -169,7 +169,12 @@ if pagina == "📄 Nuevo Recibo":
 elif pagina == "📊 Historial":
     st.title("📊 Historial de Consumos")
 
-    df = db.get_all()
+    try:
+        df = db.get_all()
+    except Exception as e:
+        st.error("❌ Error en get_all()")
+        st.code(str(e))
+        st.stop()
 
     if df.empty:
         st.info("Aún no hay datos. Ingresa el primer recibo en '📄 Nuevo Recibo'.")
