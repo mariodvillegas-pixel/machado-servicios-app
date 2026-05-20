@@ -39,7 +39,7 @@ st.markdown("""
 
 # ── Conexión a Google Sheets ─────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def get_db():
+def get_db(_v=6):  # incrementar para forzar nuevo caché
     return SheetsDB(
         dict(st.secrets["gcp_service_account"]),
         st.secrets["sheet_id"],
