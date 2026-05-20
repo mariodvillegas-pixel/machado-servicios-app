@@ -20,13 +20,27 @@ COLUMNS = [
 
 class SheetsDB:
     def __init__(self, credentials_dict: dict, sheet_id: str):
-        creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
-        self._client = gspread.authorize(creds)
+        self._creds = Credentials.from_service_account_info(credentials_dict, scopes=SCOPES)
         self._sheet_id = sheet_id
+        self._client = gspread.authorize(self._creds)
         self._ensure_headers()
 
+    # ── Direct HTTP helper (bypasses gspread worksheet title caching) ──────────
+    def _api_get(self, range_name: str) -> list:
+        """Call the Sheets API values.get directly — no worksheet object needed."""
+        from google.auth.transport.requests import AuthorizedSession
+        import urllib.parse
+        session = AuthorizedSession(self._creds)
+        encoded = urllib.parse.quote(range_name, safe="")
+        url = (f"https://sheets.googleapis.com/v4/spreadsheets"
+               f"/{self._sheet_id}/values/{encoded}")
+        resp = session.get(url, params={"valueRenderOption": "FORMATTED_VALUE"})
+        resp.raise_for_status()
+        return resp.json().get("values", [])
+
+    # ── gspread worksheet (for writes only) ───────────────────────────────────
     def _ws(self):
-        """Always return a fresh worksheet reference (handles tab renames)."""
+        """Fresh worksheet for writes (position-based, not by title)."""
         return self._client.open_by_key(self._sheet_id).sheet1
 
     def _ensure_headers(self):
@@ -36,8 +50,8 @@ class SheetsDB:
             ws.insert_row(COLUMNS, 1)
 
     def get_all(self) -> pd.DataFrame:
-        ws = self._ws()
-        values = ws.get_all_values()
+        # Range "A:ZZZ" without sheet title → first sheet, no title lookup
+        values = self._api_get("A:ZZZ")
         if not values or len(values) < 2:
             return pd.DataFrame(columns=COLUMNS)
         headers = values[0]
