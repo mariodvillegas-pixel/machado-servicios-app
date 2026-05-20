@@ -169,11 +169,14 @@ if pagina == "📄 Nuevo Recibo":
 elif pagina == "📊 Historial":
     st.title("📊 Historial de Consumos")
 
+    st.caption("🔧 código v5 — api directa")
     try:
         df = db.get_all()
     except Exception as e:
+        import traceback
         st.error("❌ Error en get_all()")
         st.code(str(e))
+        st.code(traceback.format_exc())
         st.stop()
 
     if df.empty:
